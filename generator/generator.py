@@ -154,7 +154,8 @@ def generate_nextbots():
                 f.write(f'    Name = "{npc["name"]}",\n')
                 f.write(f'    Class = "{npc["class"]}",\n')
                 f.write(f'    Category = "{npc["category"]}",\n')
-                f.write(f'    AdminSpawnable = true\n')
+                f.write(f'    AdminSpawnable = true,\n')
+                f.write(f'    Spawnable = true\n')
                 f.write(f'}})\n\n')
 
         # Create addon.json

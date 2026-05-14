@@ -7,11 +7,21 @@ ENT.PrintName = "{{PRINT_NAME}}"
 ENT.Category = "Nextbot Generator"
 ENT.Author = "Nextbot Generator"
 ENT.Spawnable = true
+ENT.AdminSpawnable = true
+
+function ENT:SpawnFunction(ply, tr, ClassName)
+    if not tr.Hit then return end
+    local SpawnPos = tr.HitPos + tr.HitNormal * 16
+    local ent = ents.Create(ClassName)
+    ent:SetPos(SpawnPos)
+    ent:Spawn()
+    ent:Activate()
+    return ent
+end
 
 if SERVER then
     function ENT:Initialize()
         self:SetModel("models/props_junk/watermelon01.mdl")
-        self:SetNoDraw(true)
         self:SetHealth({{HEALTH}})
         self.LoseTargetDist = {{LOSE_TARGET_DIST}}
         self.SearchRadius = {{SEARCH_RADIUS}}
@@ -21,6 +31,9 @@ if SERVER then
 
         self:loco:SetJumpHeight({{JUMP_POWER}})
         self.AttackDamage = {{DAMAGE}}
+
+        self:SetCollisionBounds(Vector(-16, -16, 0), Vector(16, 16, 72))
+        self:SetCollisionGroup(COLLISION_GROUP_NPC)
     end
 
     function ENT:SetEnemy(ent) self.Enemy = ent end
@@ -54,17 +67,22 @@ if SERVER then
     function ENT:RunBehaviour()
         while (true) do
             if self:HaveEnemy() then
-                self:loco:FaceTowards(self:GetEnemy():GetPos())
-                self:StartActivity(ACT_WALK)
-                self:loco:SetDesiredSpeed({{SPEED}})
-                self:loco:SetAcceleration({{ACCELERATION}})
-                self:MoveToPos(self:GetEnemy():GetPos())
-                self:StartActivity(ACT_IDLE)
+                local enemy = self:GetEnemy()
+                if IsValid(enemy) and enemy:Alive() then
+                    self:loco:FaceTowards(enemy:GetPos())
+                    self:StartActivity(ACT_WALK)
+                    self:loco:SetDesiredSpeed({{SPEED}})
+                    self:loco:SetAcceleration({{ACCELERATION}})
+                    self:MoveToPos(enemy:GetPos())
+                    self:StartActivity(ACT_IDLE)
+                else
+                    self:SetEnemy(nil)
+                end
             else
                 self:StartActivity(ACT_IDLE)
                 self:FindEnemy()
             end
-            coroutine.wait(1)
+            coroutine.wait(0.1)
         end
     end
 
