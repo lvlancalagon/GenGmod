@@ -18,6 +18,9 @@ if SERVER then
         self.ChaseSounds = {{CHASE_SOUND}}
         self.KillSounds = {{KILL_SOUND}}
         self.NextSoundTime = 0
+
+        self:loco:SetJumpHeight({{JUMP_POWER}})
+        self.AttackDamage = {{DAMAGE}}
     end
 
     function ENT:SetEnemy(ent) self.Enemy = ent end
@@ -67,7 +70,13 @@ if SERVER then
 
     function ENT:OnContact(ent)
         if ent:IsPlayer() and ent:Alive() then
-            ent:Kill()
+            local dmgInfo = DamageInfo()
+            dmgInfo:SetAttacker(self)
+            dmgInfo:SetInflictor(self)
+            dmgInfo:SetDamage(self.AttackDamage)
+            dmgInfo:SetDamageType(DMG_SLASH)
+            ent:TakeDamageInfo(dmgInfo)
+
             if #self.KillSounds > 0 then
                 local snd = self.KillSounds[math.random(#self.KillSounds)]
                 self:EmitSound(snd, 100, 100)
@@ -106,9 +115,3 @@ if CLIENT then
         cam.End3D2D()
     end
 end
-
-list.Set("NPC", "{{CLASS_NAME}}", {
-    Name = "{{PRINT_NAME}}",
-    Class = "{{CLASS_NAME}}",
-    Category = "Nextbot Generator"
-})

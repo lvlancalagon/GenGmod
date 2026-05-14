@@ -25,6 +25,7 @@ def generate_nextbots():
     images = [f for f in os.listdir(input_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
 
     generated_count = 0
+    npc_list = []
 
     for img_file in images:
         bot_name = os.path.splitext(img_file)[0].lower()
@@ -98,7 +99,9 @@ def generate_nextbots():
             "speed": 450,
             "acceleration": 900,
             "search_radius": 2000,
-            "lose_target_dist": 3000
+            "lose_target_dist": 3000,
+            "damage": 100,
+            "jump_power": 58
         }
         if os.path.exists(config_file):
             try:
@@ -123,14 +126,37 @@ def generate_nextbots():
         content = content.replace("{{ACCELERATION}}", str(bot_config["acceleration"]))
         content = content.replace("{{SEARCH_RADIUS}}", str(bot_config["search_radius"]))
         content = content.replace("{{LOSE_TARGET_DIST}}", str(bot_config["lose_target_dist"]))
+        content = content.replace("{{DAMAGE}}", str(bot_config["damage"]))
+        content = content.replace("{{JUMP_POWER}}", str(bot_config["jump_power"]))
 
         with open(lua_path, 'w') as f:
             f.write(content)
+
+        npc_list.append({
+            "name": bot_display_name,
+            "class": f"npc_{bot_name}",
+            "category": "Nextbot Generator"
+        })
 
         generated_count += 1
         print(f"Done for {bot_name}!")
 
     if generated_count > 0:
+        # Create autorun file for NPC registration
+        autorun_dir = os.path.join(addon_path, "lua", "autorun")
+        os.makedirs(autorun_dir, exist_ok=True)
+        autorun_path = os.path.join(autorun_dir, "generated_nextbots_reg.lua")
+
+        with open(autorun_path, 'w') as f:
+            f.write("-- NPC Registration for Generated Nextbots\n")
+            for npc in npc_list:
+                f.write(f'list.Set("NPC", "{npc["class"]}", {{\n')
+                f.write(f'    Name = "{npc["name"]}",\n')
+                f.write(f'    Class = "{npc["class"]}",\n')
+                f.write(f'    Category = "{npc["category"]}",\n')
+                f.write(f'    AdminSpawnable = true\n')
+                f.write(f'}})\n\n')
+
         # Create addon.json
         addon_json_path = os.path.join(addon_path, "addon.json")
         addon_data = {
