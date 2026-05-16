@@ -68,8 +68,10 @@ def generate_nextbots():
                 kill_sounds.append(snd)
 
         # Copy image
-        shutil.copy(os.path.join(input_dir, img_file), os.path.join(material_dir, img_file))
-        material_path = f"nextbot/{img_file}"
+        ext = os.path.splitext(img_file)[1]
+        dest_img_name = f"{bot_name}{ext}"
+        shutil.copy(os.path.join(input_dir, img_file), os.path.join(material_dir, dest_img_name))
+        material_path = f"nextbot/{dest_img_name}"
 
         # Copy sounds and prepare Lua table strings
         chase_sound_paths = []
@@ -155,6 +157,7 @@ This addon was automatically generated and requires DrGBase.
 Installation:
 1. Ensure you have DrGBase installed: https://steamcommunity.com/sharedfiles/filedetails/?id=1560118657
 2. Copy this folder ('{addon_name}') into your 'Garry's Mod/garrysmod/addons/' directory.
+   - IMPORTANT: Make sure the 'lua', 'materials', and 'sound' folders are all inside.
 3. Restart Garry's Mod.
 
 Troubleshooting:

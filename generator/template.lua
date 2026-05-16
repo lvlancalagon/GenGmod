@@ -27,8 +27,9 @@ ENT.ReachEnemyRange = 50
 if SERVER then
     function ENT:CustomInitialize()
         self:SetCollisionBounds(Vector(-16, -16, 0), Vector(16, 16, 72))
-        self:SetRenderMode(RENDERMODE_TRANSALPHA)
-        self:SetColor(Color(255, 255, 255, 0))
+
+        -- Set render bounds to prevent culling
+        self:SetRenderBounds(Vector(-128, -128, 0), Vector(128, 128, 128))
     end
 
     function ENT:OnMeleeAttack(enemy)
@@ -55,23 +56,18 @@ if SERVER then
 end
 
 if CLIENT then
-    function ENT:CustomDraw()
+    local MAT = Material("{{MATERIAL_PATH}}", "noclamp smooth")
+
+    function ENT:CustomInitialize()
+        self:SetRenderBounds(Vector(-128, -128, 0), Vector(128, 128, 128))
+    end
+
+    function ENT:Draw()
+        -- Do not call self:DrawModel() to keep the watermelon hidden
+
         local pos = self:GetPos() + Vector(0, 0, 60)
-
-        -- Billboarding: Make the sprite face the player
-        local ang = EyeAngles()
-        ang:RotateAroundAxis(ang:Up(), -90)
-        ang:RotateAroundAxis(ang:Forward(), 90)
-
-        if not self.SpriteMat then
-            self.SpriteMat = Material("{{MATERIAL_PATH}}", "noclamp smooth")
-        end
-
-        cam.Start3D2D(pos, ang, 0.5)
-            surface.SetMaterial(self.SpriteMat)
-            surface.SetDrawColor(255, 255, 255, 255)
-            surface.DrawTexturedRect(-128, -128, 256, 256)
-        cam.End3D2D()
+        render.SetMaterial(MAT)
+        render.DrawSprite(pos, 128, 128, Color(255, 255, 255, 255))
     end
 end
 
