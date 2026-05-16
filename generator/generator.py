@@ -137,13 +137,50 @@ def generate_nextbots():
         addon_json_path = os.path.join(addon_path, "addon.json")
         addon_data = {
             "title": "Generated Nextbots Collection",
-            "type": "npc",
+            "description": "A collection of 2D Nextbots generated using the Garry's Mod Nextbot Generator.",
+            "type": "NPC",
             "tags": ["fun", "roleplay"],
             "ignore": []
         }
         with open(addon_json_path, 'w') as f:
             json.dump(addon_data, f, indent=4)
+
+        # Create local README.txt in the addon folder
+        readme_content = f"""
+Garry's Mod Generated Nextbot Addon
+===================================
+
+This addon was automatically generated.
+
+Installation:
+1. Copy this folder ('{addon_name}') into your 'Garry's Mod/garrysmod/addons/' directory.
+2. Restart Garry's Mod.
+
+Troubleshooting:
+- If you see 'Addon Hidden addon failed to download' in the console:
+  This is a Steam Workshop issue. It means you are subscribed to a workshop item
+  that has been deleted or hidden by its author. It is NOT caused by this local addon.
+  To fix it, go to your Steam Workshop subscriptions and unsubscribe from any items
+  that appear as 'Deleted' or 'Hidden'.
+
+- If the Nextbot doesn't appear in-game:
+  Check the 'NPCs' tab in the spawn menu under the category 'Nextbot Generator'.
+"""
+        with open(os.path.join(addon_path, "README.txt"), 'w') as f:
+            f.write(readme_content.strip())
         print(f"\nSuccessfully generated {generated_count} Nextbots in '{addon_name}'")
+
+        # Troubleshooting Info
+        print("\n" + "="*50)
+        print("TROUBLESHOOTING & INSTALLATION")
+        print("="*50)
+        print(f"1. Copy the folder 'outputs/{addon_name}' to your GMod 'addons' directory.")
+        print("2. If you see 'Addon Hidden addon failed to download' in GMod, please note:")
+        print("   - This is a known Steam Workshop issue and is NOT caused by this generator.")
+        print("   - It happens when you are subscribed to an addon that was deleted or hidden by its creator.")
+        print("   - To fix it, go to your Steam Workshop subscriptions and unsubscribe from any 'Deleted' or 'Hidden' items.")
+        print("3. Ensure your 'inputs' folder has valid .png and .mp3/.wav files for the best results.")
+        print("="*50 + "\n")
 
 if __name__ == "__main__":
     # Change directory to the script's directory to handle relative paths correctly

@@ -42,6 +42,30 @@ if SERVER then
     function ENT:SetEnemy(ent) self.Enemy = ent end
     function ENT:GetEnemy() return self.Enemy end
 
+    function ENT:MoveToPos(pos, options)
+        local options = options or {}
+        local path = Path("Follow")
+        path:SetMinLookAheadDistance(options.lookahead or 300)
+        path:SetGoalTolerance(options.tolerance or 20)
+        path:Compute(self, pos)
+
+        if not path:IsValid() then return "failed" end
+
+        while path:IsValid() and self:HaveEnemy() do
+            if path:GetAge() > (options.maxage or 0.5) then
+                path:Compute(self, self:GetEnemy():GetPos())
+            end
+            path:Update(self)
+            if options.draw then path:Draw() end
+            if self.loco:IsStuck() then
+                self:HandleStuck()
+                return "stuck"
+            end
+            coroutine.yield()
+        end
+        return "ok"
+    end
+
     function ENT:HaveEnemy()
         if self:GetEnemy() and IsValid(self:GetEnemy()) then
             if self:GetRangeTo(self:GetEnemy():GetPos()) > self.LoseTargetDist then
@@ -76,7 +100,14 @@ if SERVER then
                     self:StartActivity(ACT_WALK)
                     self:loco:SetDesiredSpeed({{SPEED}})
                     self:loco:SetAcceleration({{ACCELERATION}})
-                    self:MoveToPos(enemy:GetPos())
+
+                    -- Improved movement: Update path more frequently to follow moving targets
+                    self:MoveToPos(enemy:GetPos(), {
+                        maxage = 0.5,
+                        repath = 0.1,
+                        tolerance = 20
+                    })
+
                     self:StartActivity(ACT_IDLE)
                 else
                     self:SetEnemy(nil)
@@ -114,6 +145,10 @@ if SERVER then
     end
 
     function ENT:OnStuck()
+        self:HandleStuck()
+    end
+
+    function ENT:HandleStuck()
         self:loco:Jump()
         self:loco:ClearStuck()
     end
