@@ -50,6 +50,12 @@ if SERVER then
     end
 
     function ENT:OnIdle()
+        -- Play random idle/chase sound if not chasing
+        if not self:HasEnemy() and #self.ChaseSounds > 0 and CurTime() > self.NextChaseSoundTime then
+            local snd = self.ChaseSounds[math.random(#self.ChaseSounds)]
+            self:EmitSound(snd, 100, 100)
+            self.NextChaseSoundTime = CurTime() + math.random(5, 10)
+        end
         self:AddPatrolPos(self:RandomPos(1500))
     end
 
@@ -58,8 +64,11 @@ if SERVER then
         if #self.ChaseSounds > 0 and CurTime() > self.NextChaseSoundTime then
             local snd = self.ChaseSounds[math.random(#self.ChaseSounds)]
             self:EmitSound(snd, 100, 100)
-            -- Wait 5 seconds before playing next chase sound
-            self.NextChaseSoundTime = CurTime() + 5
+
+            -- Wait for the duration of the sound plus a bit of delay
+            local duration = 5 -- Default fallback
+            -- We use a rough estimation since SoundDuration might not work on server without precaching
+            self.NextChaseSoundTime = CurTime() + duration
         end
     end
 

@@ -3,6 +3,9 @@ import shutil
 import re
 import json
 
+def normalize(s):
+    return re.sub(r'[^a-z0-9]', '', s.lower())
+
 def generate_nextbots():
     input_dir = 'inputs'
     output_dir = 'outputs'
@@ -27,10 +30,11 @@ def generate_nextbots():
     generated_count = 0
 
     for img_file in images:
-        bot_name = os.path.splitext(img_file)[0].lower()
-        bot_name = re.sub(r'[^a-z0-9_]', '', bot_name) # Sanitize for GMod
+        img_base = os.path.splitext(img_file)[0]
+        original_normalized = normalize(img_base)
+        bot_name = re.sub(r'[^a-z0-9_]', '', img_base.lower().replace(' ', '_'))
 
-        print(f"Generating Nextbot: {bot_name}...")
+        print(f"Generating Nextbot: {bot_name} (from {img_file})...")
 
         # Paths in GMod addon
         lua_path = os.path.join(addon_path, "lua", "entities", f"npc_{bot_name}.lua")
@@ -48,19 +52,20 @@ def generate_nextbots():
         # Look for sounds
         for snd in os.listdir(input_dir):
             snd_lower = snd.lower()
-            if not snd_lower.endswith(('.mp3', '.wav')):
+            if not snd_lower.endswith(('.mp3', '.wav', '.ogg')):
                 continue
 
             snd_clean = os.path.splitext(snd_lower)[0]
+            snd_normalized = normalize(snd_clean)
 
             # Categorize sounds: botname_chase.mp3, botname_kill.wav, etc.
-            # We strictly require the bot_name to be in the filename to avoid cross-contamination
-            if bot_name in snd_clean:
-                if any(x in snd_clean for x in ["kill", "death"]):
+            if original_normalized in snd_normalized:
+                if any(x in snd_normalized for x in ["kill", "death"]):
                     kill_sounds.append(snd)
-                elif any(x in snd_clean for x in ["chase", "sound", bot_name]):
-                    # If it has the bot name but no kill/death keyword, treat as chase/idle
+                    print(f"  Matched kill sound: {snd}")
+                else:
                     chase_sounds.append(snd)
+                    print(f"  Matched chase/idle sound: {snd}")
 
         # Copy image
         ext = os.path.splitext(img_file)[1]
