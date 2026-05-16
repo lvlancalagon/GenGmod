@@ -8,11 +8,6 @@ ENT.Models = {"models/props_junk/watermelon01.mdl"}
 ENT.SpawnHealth = {{HEALTH}}
 ENT.BloodColor = BLOOD_COLOR_RED
 
--- Sounds
-ENT.OnIdleSounds = {{CHASE_SOUND}}
-ENT.IdleSoundDelay = 5
-ENT.OnDeathSounds = {{KILL_SOUND}}
-
 -- Stats
 ENT.WalkSpeed = {{SPEED}}
 ENT.RunSpeed = {{SPEED}}
@@ -30,6 +25,11 @@ if SERVER then
 
         -- Set render bounds to prevent culling
         self:SetRenderBounds(Vector(-128, -128, 0), Vector(128, 128, 128))
+
+        -- Sound initialization
+        self.ChaseSounds = {{CHASE_SOUND}}
+        self.KillSounds = {{KILL_SOUND}}
+        self.NextChaseSoundTime = 0
     end
 
     function ENT:OnMeleeAttack(enemy)
@@ -38,6 +38,11 @@ if SERVER then
             type = DMG_SLASH,
             viewpunch = Angle(20, 0, 0)
         })
+
+        -- Play kill sound
+        if #self.KillSounds > 0 then
+            self:EmitSound(self.KillSounds[math.random(#self.KillSounds)], 100, 100)
+        end
     end
 
     function ENT:OnReachedPatrol()
@@ -48,9 +53,25 @@ if SERVER then
         self:AddPatrolPos(self:RandomPos(1500))
     end
 
+    function ENT:OnChaseEnemy(enemy)
+        -- Manual chase sound loop
+        if #self.ChaseSounds > 0 and CurTime() > self.NextChaseSoundTime then
+            local snd = self.ChaseSounds[math.random(#self.ChaseSounds)]
+            self:EmitSound(snd, 100, 100)
+            -- Wait 5 seconds before playing next chase sound
+            self.NextChaseSoundTime = CurTime() + 5
+        end
+    end
+
     function ENT:OnContact(ent)
         if ent:IsPlayer() and ent:Alive() then
             self:OnMeleeAttack(ent)
+        end
+    end
+
+    function ENT:OnDeath(dmg, hitgroup)
+        if #self.KillSounds > 0 then
+            self:EmitSound(self.KillSounds[math.random(#self.KillSounds)], 100, 100)
         end
     end
 end

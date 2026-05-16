@@ -53,19 +53,14 @@ def generate_nextbots():
 
             snd_clean = os.path.splitext(snd_lower)[0]
 
-            # Chase sound candidates
-            chase_patterns = [
-                re.compile(rf'^{bot_name}(_chase|_sound)?(\d+)?$'),
-            ]
-            if any(p.match(snd_clean) for p in chase_patterns):
-                chase_sounds.append(snd)
-
-            # Kill sound candidates
-            kill_patterns = [
-                re.compile(rf'^{bot_name}(_kill|_death|_death_sound)(\d+)?$'),
-            ]
-            if any(p.match(snd_clean) for p in kill_patterns):
-                kill_sounds.append(snd)
+            # Categorize sounds: botname_chase.mp3, botname_kill.wav, etc.
+            # We strictly require the bot_name to be in the filename to avoid cross-contamination
+            if bot_name in snd_clean:
+                if any(x in snd_clean for x in ["kill", "death"]):
+                    kill_sounds.append(snd)
+                elif any(x in snd_clean for x in ["chase", "sound", bot_name]):
+                    # If it has the bot name but no kill/death keyword, treat as chase/idle
+                    chase_sounds.append(snd)
 
         # Copy image
         ext = os.path.splitext(img_file)[1]
