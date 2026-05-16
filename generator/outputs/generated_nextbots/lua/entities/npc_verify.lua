@@ -3,7 +3,7 @@ AddCSLuaFile()
 ENT.Base = "base_nextbot"
 ENT.Type = "nextbot"
 
-ENT.PrintName = "{{PRINT_NAME}}"
+ENT.PrintName = "Verify"
 ENT.Category = "Nextbot Generator"
 ENT.Author = "Nextbot Generator"
 ENT.Spawnable = true
@@ -22,15 +22,15 @@ end
 if SERVER then
     function ENT:Initialize()
         self:SetModel("models/props_junk/watermelon01.mdl")
-        self:SetHealth({{HEALTH}})
-        self.LoseTargetDist = {{LOSE_TARGET_DIST}}
-        self.SearchRadius = {{SEARCH_RADIUS}}
-        self.ChaseSounds = {{CHASE_SOUND}}
-        self.KillSounds = {{KILL_SOUND}}
+        self:SetHealth(100)
+        self.LoseTargetDist = 3000
+        self.SearchRadius = 2000
+        self.ChaseSounds = {}
+        self.KillSounds = {}
         self.NextSoundTime = 0
 
-        self:loco:SetJumpHeight({{JUMP_POWER}})
-        self.AttackDamage = {{DAMAGE}}
+        self:loco:SetJumpHeight(58)
+        self.AttackDamage = 100
 
         self:SetCollisionBounds(Vector(-16, -16, 0), Vector(16, 16, 72))
         self:SetCollisionGroup(COLLISION_GROUP_NPC)
@@ -74,8 +74,8 @@ if SERVER then
                 if IsValid(enemy) and enemy:Alive() then
                     self:loco:FaceTowards(enemy:GetPos())
                     self:StartActivity(ACT_WALK)
-                    self:loco:SetDesiredSpeed({{SPEED}})
-                    self:loco:SetAcceleration({{ACCELERATION}})
+                    self:loco:SetDesiredSpeed(450)
+                    self:loco:SetAcceleration(900)
                     self:MoveToPos(enemy:GetPos())
                     self:StartActivity(ACT_IDLE)
                 else
@@ -129,7 +129,7 @@ if CLIENT then
         ang:RotateAroundAxis(ang:Forward(), 90)
 
         if not self.SpriteMat then
-            self.SpriteMat = Material("{{MATERIAL_PATH}}", "noclamp smooth")
+            self.SpriteMat = Material("nextbot/verify.png", "noclamp smooth")
         end
 
         cam.Start3D2D(pos, ang, 0.5)
@@ -140,9 +140,9 @@ if CLIENT then
     end
 end
 
-list.Set("NPC", "{{CLASS_NAME}}", {
-    Name = "{{PRINT_NAME}}",
-    Class = "{{CLASS_NAME}}",
+list.Set("NPC", "npc_verify", {
+    Name = "Verify",
+    Class = "npc_verify",
     Category = "Nextbot Generator",
     Spawnable = true,
     AdminSpawnable = true

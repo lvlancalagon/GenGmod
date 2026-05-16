@@ -25,7 +25,6 @@ def generate_nextbots():
     images = [f for f in os.listdir(input_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
 
     generated_count = 0
-    npc_list = []
 
     for img_file in images:
         bot_name = os.path.splitext(img_file)[0].lower()
@@ -55,7 +54,6 @@ def generate_nextbots():
             snd_clean = os.path.splitext(snd_lower)[0]
 
             # Chase sound candidates
-            # Matches: botname, botname_chase, botname_sound, botname_chase1, botname1, etc.
             chase_patterns = [
                 re.compile(rf'^{bot_name}(_chase|_sound)?(\d+)?$'),
             ]
@@ -63,7 +61,6 @@ def generate_nextbots():
                 chase_sounds.append(snd)
 
             # Kill sound candidates
-            # Matches: botname_kill, botname_death, botname_death_sound, botname_kill1, etc.
             kill_patterns = [
                 re.compile(rf'^{bot_name}(_kill|_death|_death_sound)(\d+)?$'),
             ]
@@ -132,32 +129,10 @@ def generate_nextbots():
         with open(lua_path, 'w') as f:
             f.write(content)
 
-        npc_list.append({
-            "name": bot_display_name,
-            "class": f"npc_{bot_name}",
-            "category": "Nextbot Generator"
-        })
-
         generated_count += 1
         print(f"Done for {bot_name}!")
 
     if generated_count > 0:
-        # Create autorun file for NPC registration
-        autorun_dir = os.path.join(addon_path, "lua", "autorun")
-        os.makedirs(autorun_dir, exist_ok=True)
-        autorun_path = os.path.join(autorun_dir, "generated_nextbots_reg.lua")
-
-        with open(autorun_path, 'w') as f:
-            f.write("-- NPC Registration for Generated Nextbots\n")
-            for npc in npc_list:
-                f.write(f'list.Set("NPC", "{npc["class"]}", {{\n')
-                f.write(f'    Name = "{npc["name"]}",\n')
-                f.write(f'    Class = "{npc["class"]}",\n')
-                f.write(f'    Category = "{npc["category"]}",\n')
-                f.write(f'    AdminSpawnable = true,\n')
-                f.write(f'    Spawnable = true\n')
-                f.write(f'}})\n\n')
-
         # Create addon.json
         addon_json_path = os.path.join(addon_path, "addon.json")
         addon_data = {
