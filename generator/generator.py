@@ -147,14 +147,15 @@ def generate_nextbots():
 
         # Create local README.txt in the addon folder
         readme_content = f"""
-Garry's Mod Generated Nextbot Addon
+Garry's Mod Generated Nextbot Addon (DrGBase Version)
 ===================================
 
-This addon was automatically generated.
+This addon was automatically generated and requires DrGBase.
 
 Installation:
-1. Copy this folder ('{addon_name}') into your 'Garry's Mod/garrysmod/addons/' directory.
-2. Restart Garry's Mod.
+1. Ensure you have DrGBase installed: https://steamcommunity.com/sharedfiles/filedetails/?id=1560118657
+2. Copy this folder ('{addon_name}') into your 'Garry's Mod/garrysmod/addons/' directory.
+3. Restart Garry's Mod.
 
 Troubleshooting:
 - If you see 'Addon Hidden addon failed to download' in the console:
@@ -164,7 +165,7 @@ Troubleshooting:
   that appear as 'Deleted' or 'Hidden'.
 
 - If the Nextbot doesn't appear in-game:
-  Check the 'NPCs' tab in the spawn menu under the category 'Nextbot Generator'.
+  Check the 'NPCs' tab in the spawn menu under the category 'Nextbot Generator (DrGBase)'.
 """
         with open(os.path.join(addon_path, "README.txt"), 'w') as f:
             f.write(readme_content.strip())
@@ -174,12 +175,13 @@ Troubleshooting:
         print("\n" + "="*50)
         print("TROUBLESHOOTING & INSTALLATION")
         print("="*50)
-        print(f"1. Copy the folder 'outputs/{addon_name}' to your GMod 'addons' directory.")
-        print("2. If you see 'Addon Hidden addon failed to download' in GMod, please note:")
+        print(f"1. Ensure DrGBase is installed: https://steamcommunity.com/sharedfiles/filedetails/?id=1560118657")
+        print(f"2. Copy the folder 'outputs/{addon_name}' to your GMod 'addons' directory.")
+        print("3. If you see 'Addon Hidden addon failed to download' in GMod, please note:")
         print("   - This is a known Steam Workshop issue and is NOT caused by this generator.")
         print("   - It happens when you are subscribed to an addon that was deleted or hidden by its creator.")
         print("   - To fix it, go to your Steam Workshop subscriptions and unsubscribe from any 'Deleted' or 'Hidden' items.")
-        print("3. Ensure your 'inputs' folder has valid .png and .mp3/.wav files for the best results.")
+        print("4. Ensure your 'inputs' folder has valid .png and .mp3/.wav files for the best results.")
         print("="*50 + "\n")
 
 if __name__ == "__main__":
