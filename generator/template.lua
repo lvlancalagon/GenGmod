@@ -3,13 +3,15 @@ ENT.Base = "drgbase_nextbot"
 ENT.Type = "nextbot"
 
 ENT.PrintName = "{{PRINT_NAME}}"
-ENT.Category = "Nextbot Generator (DrGBase)"
+ENT.Category = "Custom Nextbots"
 ENT.Models = {"models/props_junk/watermelon01.mdl"}
 ENT.SpawnHealth = {{HEALTH}}
 ENT.BloodColor = BLOOD_COLOR_RED
+ENT.Spawnable = true
+ENT.AdminSpawnable = true
 
 -- Stats
-ENT.WalkSpeed = {{SPEED}}
+ENT.WalkSpeed = 150
 ENT.RunSpeed = {{SPEED}}
 ENT.Acceleration = {{ACCELERATION}}
 ENT.JumpHeight = {{JUMP_POWER}}
@@ -30,6 +32,11 @@ if SERVER then
         self.ChaseSounds = {{CHASE_SOUND}}
         self.KillSounds = {{KILL_SOUND}}
         self.NextChaseSoundTime = 0
+
+        -- Configuration
+        self.LoseTargetDist = {{LOSE_TARGET_DIST}}
+        self.SearchRadius = {{SEARCH_RADIUS}}
+        self.NextContactDamageTime = 0
     end
 
     function ENT:OnMeleeAttack(enemy)
@@ -50,30 +57,57 @@ if SERVER then
     end
 
     function ENT:OnIdle()
+        -- Wander around idly if no players are near
+        self:AddPatrolPos(self:RandomPos(self.SearchRadius))
+
         -- Play random idle/chase sound if not chasing
         if not self:HasEnemy() and #self.ChaseSounds > 0 and CurTime() > self.NextChaseSoundTime then
             local snd = self.ChaseSounds[math.random(#self.ChaseSounds)]
             self:EmitSound(snd, 100, 100)
             self.NextChaseSoundTime = CurTime() + math.random(5, 10)
         end
-        self:AddPatrolPos(self:RandomPos(1500))
     end
 
     function ENT:OnChaseEnemy(enemy)
+        -- Obstacle and prop destruction code
+        local trace = util.TraceLine({
+            start = self:GetPos() + Vector(0,0,36),
+            endpos = self:GetPos() + self:GetForward() * 40 + Vector(0,0,36),
+            filter = self
+        })
+
+        if IsValid(trace.Entity) then
+            -- Smash props, doors, and breakables in the way
+            if trace.Entity:GetClass() == "prop_physics" or trace.Entity:GetClass() == "func_breakable" then
+                trace.Entity:TakeDamage( 500, self, self )
+                local effectData = EffectData()
+                effectData:SetOrigin( trace.Entity:GetPos() )
+                util.Effect( "Explosion", effectData )
+            end
+        end
+
         -- Manual chase sound loop
         if #self.ChaseSounds > 0 and CurTime() > self.NextChaseSoundTime then
             local snd = self.ChaseSounds[math.random(#self.ChaseSounds)]
             self:EmitSound(snd, 100, 100)
-
-            -- Wait for the duration of the sound plus a bit of delay
-            local duration = 5 -- Default fallback
-            -- We use a rough estimation since SoundDuration might not work on server without precaching
-            self.NextChaseSoundTime = CurTime() + duration
+            self.NextChaseSoundTime = CurTime() + 5
         end
     end
 
     function ENT:OnContact(ent)
-        if ent:IsPlayer() and ent:Alive() then
+        -- Re-evaluate and attack if enemy is too close
+        if ent:IsPlayer() and ent:Alive() and CurTime() > self.NextContactDamageTime then
+            local dmgInfo = DamageInfo()
+            dmgInfo:SetAttacker(self)
+            dmgInfo:SetInflictor(self)
+            dmgInfo:SetDamage(20) -- Damage dealt per touch as in provided code
+            dmgInfo:SetDamageType(DMG_SLASH)
+            ent:TakeDamageInfo(dmgInfo)
+
+            -- Small cooldown to prevent instant death
+            self.NextContactDamageTime = CurTime() + 0.5
+
+            -- Also trigger melee attack logic for sounds/primary damage
             self:OnMeleeAttack(ent)
         end
     end

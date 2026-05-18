@@ -4,6 +4,7 @@ import re
 import json
 
 def normalize(s):
+    # Normalize by lowercasing and removing all non-alphanumeric characters
     return re.sub(r'[^a-z0-9]', '', s.lower())
 
 def generate_nextbots():
@@ -26,15 +27,19 @@ def generate_nextbots():
 
     # Find all images (PNG/JPG)
     images = [f for f in os.listdir(input_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    # Find all sounds (MP3/WAV/OGG)
+    all_sounds = [f for f in os.listdir(input_dir) if f.lower().endswith(('.mp3', '.wav', '.ogg'))]
 
     generated_count = 0
 
     for img_file in images:
         img_base = os.path.splitext(img_file)[0]
-        original_normalized = normalize(img_base)
+        # bot_name is the sanitized version for GMod class naming
         bot_name = re.sub(r'[^a-z0-9_]', '', img_base.lower().replace(' ', '_'))
+        # normalized_name is for matching assets regardless of spaces/underscores
+        normalized_name = normalize(img_base)
 
-        print(f"Generating Nextbot: {bot_name} (from {img_file})...")
+        print(f"\nGenerating Nextbot: {bot_name} (from {img_file})...")
 
         # Paths in GMod addon
         lua_path = os.path.join(addon_path, "lua", "entities", f"npc_{bot_name}.lua")
@@ -50,22 +55,18 @@ def generate_nextbots():
         kill_sounds = []
 
         # Look for sounds
-        for snd in os.listdir(input_dir):
-            snd_lower = snd.lower()
-            if not snd_lower.endswith(('.mp3', '.wav', '.ogg')):
-                continue
-
-            snd_clean = os.path.splitext(snd_lower)[0]
-            snd_normalized = normalize(snd_clean)
+        for snd in all_sounds:
+            snd_clean = os.path.splitext(snd.lower())[0]
+            snd_norm = normalize(snd_clean)
 
             # Categorize sounds: botname_chase.mp3, botname_kill.wav, etc.
-            if original_normalized in snd_normalized:
-                if any(x in snd_normalized for x in ["kill", "death"]):
+            # Match if the normalized bot name is part of the sound name,
+            # OR if there's only one bot, use all available sounds as fallback.
+            if normalized_name in snd_norm or len(images) == 1:
+                if any(x in snd_norm for x in ["kill", "death", "attack"]):
                     kill_sounds.append(snd)
-                    print(f"  Matched kill sound: {snd}")
                 else:
                     chase_sounds.append(snd)
-                    print(f"  Matched chase/idle sound: {snd}")
 
         # Copy image
         ext = os.path.splitext(img_file)[1]
@@ -80,6 +81,7 @@ def generate_nextbots():
             dest_name = f"chase{i+1}{ext}"
             shutil.copy(os.path.join(input_dir, snd), os.path.join(sound_dir, dest_name))
             chase_sound_paths.append(f"nextbot/{bot_name}/{dest_name}")
+            print(f"  Matched chase sound: {snd} -> {dest_name}")
 
         kill_sound_paths = []
         for i, snd in enumerate(kill_sounds):
@@ -87,6 +89,7 @@ def generate_nextbots():
             dest_name = f"kill{i+1}{ext}"
             shutil.copy(os.path.join(input_dir, snd), os.path.join(sound_dir, dest_name))
             kill_sound_paths.append(f"nextbot/{bot_name}/{dest_name}")
+            print(f"  Matched kill sound: {snd} -> {dest_name}")
 
         chase_lua_table = "{" + ", ".join([f'"{p}"' for p in chase_sound_paths]) + "}"
         kill_lua_table = "{" + ", ".join([f'"{p}"' for p in kill_sound_paths]) + "}"
@@ -95,8 +98,8 @@ def generate_nextbots():
         config_file = os.path.join(input_dir, f"{bot_name}.json")
         bot_config = {
             "health": 100,
-            "speed": 450,
-            "acceleration": 900,
+            "speed": 600,
+            "acceleration": 4000,
             "search_radius": 2000,
             "lose_target_dist": 3000,
             "damage": 100,
@@ -139,7 +142,7 @@ def generate_nextbots():
         addon_json_path = os.path.join(addon_path, "addon.json")
         addon_data = {
             "title": "Generated Nextbots Collection",
-            "description": "A collection of 2D Nextbots generated using the Garry's Mod Nextbot Generator.",
+            "description": "A collection of aggressive 2D Nextbots generated using the Garry's Mod Nextbot Generator.",
             "type": "NPC",
             "tags": ["fun", "roleplay"],
             "ignore": []
@@ -168,7 +171,7 @@ Troubleshooting:
   that appear as 'Deleted' or 'Hidden'.
 
 - If the Nextbot doesn't appear in-game:
-  Check the 'NPCs' tab in the spawn menu under the category 'Nextbot Generator (DrGBase)'.
+  Check the 'NPCs' tab in the spawn menu under the category 'Custom Nextbots'.
 """
         with open(os.path.join(addon_path, "README.txt"), 'w') as f:
             f.write(readme_content.strip())
