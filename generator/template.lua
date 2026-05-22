@@ -100,7 +100,7 @@ if SERVER then
             local dmgInfo = DamageInfo()
             dmgInfo:SetAttacker(self)
             dmgInfo:SetInflictor(self)
-            dmgInfo:SetDamage(20) -- Damage dealt per touch as in provided code
+            dmgInfo:SetDamage(20)
             dmgInfo:SetDamageType(DMG_SLASH)
             ent:TakeDamageInfo(dmgInfo)
 
@@ -120,17 +120,33 @@ if SERVER then
 end
 
 if CLIENT then
-    local MAT = Material("{{MATERIAL_PATH}}", "noclamp smooth")
+    local MAT_PATHS = {{MATERIAL_PATHS}}
 
     function ENT:CustomInitialize()
         self:SetRenderBounds(Vector(-128, -128, 0), Vector(128, 128, 128))
+
+        -- Pre-cache materials
+        self.Mats = {}
+        for _, path in ipairs(MAT_PATHS) do
+            table.insert(self.Mats, Material(path, "noclamp smooth"))
+        end
     end
 
     function ENT:Draw()
-        -- Do not call self:DrawModel() to keep the watermelon hidden
+        if not self.Mats or #self.Mats == 0 then return end
+
+        -- Animation Logic: Switch every 1.5 seconds
+        -- Real animations usually cycle through frames.
+        local frameIndex = 1
+        if #self.Mats > 1 then
+            frameIndex = math.floor(CurTime() / 1.5) % #self.Mats + 1
+        end
+
+        local currentMat = self.Mats[frameIndex]
+        if not currentMat then return end
 
         local pos = self:GetPos() + Vector(0, 0, 60)
-        render.SetMaterial(MAT)
+        render.SetMaterial(currentMat)
         render.DrawSprite(pos, 128, 128, Color(255, 255, 255, 255))
     end
 end

@@ -2,6 +2,7 @@ import os
 import shutil
 import re
 import json
+import sys
 
 def normalize(s):
     # Normalize by lowercasing and removing all non-alphanumeric characters
@@ -11,7 +12,11 @@ def generate_nextbots():
     input_dir = 'inputs'
     output_dir = 'outputs'
     template_path = 'template.lua'
-    addon_name = "generated_nextbots"
+
+    # Allow custom addon name via environment or CLI
+    addon_name = os.getenv("ADDON_NAME", "my_generated_addon")
+    if len(sys.argv) > 1:
+        addon_name = sys.argv[1]
 
     if not os.path.exists(template_path):
         print(f"Error: {template_path} not found.")
@@ -26,13 +31,22 @@ def generate_nextbots():
     os.makedirs(addon_path)
 
     # Find all images (PNG/JPG)
-    images = [f for f in os.listdir(input_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    all_images = [f for f in os.listdir(input_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+
+    # Determine primary images (those that aren't secondary animation frames)
+    # A primary image is either the only image, or doesn't end with _2, _frame2, etc.
+    primary_images = []
+    for img in all_images:
+        img_base = os.path.splitext(img.lower())[0]
+        if not re.search(r'(_[2-9]|_frame[2-9])$', img_base):
+            primary_images.append(img)
+
     # Find all sounds (MP3/WAV/OGG)
     all_sounds = [f for f in os.listdir(input_dir) if f.lower().endswith(('.mp3', '.wav', '.ogg'))]
 
     generated_count = 0
 
-    for img_file in images:
+    for img_file in primary_images:
         img_base = os.path.splitext(img_file)[0]
         # bot_name is the sanitized version for GMod class naming
         bot_name = re.sub(r'[^a-z0-9_]', '', img_base.lower().replace(' ', '_'))
@@ -43,12 +57,21 @@ def generate_nextbots():
 
         # Paths in GMod addon
         lua_path = os.path.join(addon_path, "lua", "entities", f"npc_{bot_name}.lua")
-        material_dir = os.path.join(addon_path, "materials", "nextbot")
+        material_dir = os.path.join(addon_path, "materials", "nextbot", bot_name)
         sound_dir = os.path.join(addon_path, "sound", "nextbot", bot_name)
 
         os.makedirs(os.path.dirname(lua_path), exist_ok=True)
         os.makedirs(material_dir, exist_ok=True)
         os.makedirs(sound_dir, exist_ok=True)
+
+        # Find secondary animation frames
+        animation_frames = [img_file]
+        for other_img in all_images:
+            if other_img == img_file: continue
+            other_base = os.path.splitext(other_img.lower())[0]
+            if normalized_name in normalize(other_base) and re.search(r'(_[2-9]|_frame[2-9])$', other_base):
+                animation_frames.append(other_img)
+                print(f"  Found animation frame: {other_img}")
 
         # Assets
         chase_sounds = []
@@ -59,20 +82,22 @@ def generate_nextbots():
             snd_clean = os.path.splitext(snd.lower())[0]
             snd_norm = normalize(snd_clean)
 
-            # Categorize sounds: botname_chase.mp3, botname_kill.wav, etc.
-            # Match if the normalized bot name is part of the sound name,
-            # OR if there's only one bot, use all available sounds as fallback.
-            if normalized_name in snd_norm or len(images) == 1:
+            if normalized_name in snd_norm or len(primary_images) == 1:
                 if any(x in snd_norm for x in ["kill", "death", "attack"]):
                     kill_sounds.append(snd)
                 else:
                     chase_sounds.append(snd)
 
-        # Copy image
-        ext = os.path.splitext(img_file)[1]
-        dest_img_name = f"{bot_name}{ext}"
-        shutil.copy(os.path.join(input_dir, img_file), os.path.join(material_dir, dest_img_name))
-        material_path = f"nextbot/{dest_img_name}"
+        # Copy images
+        material_paths = []
+        for i, frame in enumerate(animation_frames):
+            ext = os.path.splitext(frame)[1]
+            dest_img_name = f"frame{i+1}{ext}"
+            shutil.copy(os.path.join(input_dir, frame), os.path.join(material_dir, dest_img_name))
+            material_paths.append(f"nextbot/{bot_name}/{dest_img_name}")
+
+        # Prepare Lua material list
+        mat_lua_table = "{" + ", ".join([f'"{p}"' for p in material_paths]) + "}"
 
         # Copy sounds and prepare Lua table strings
         chase_sound_paths = []
@@ -121,7 +146,7 @@ def generate_nextbots():
         content = content.replace("{{PRINT_NAME}}", bot_display_name)
         content = content.replace("{{CHASE_SOUND}}", chase_lua_table)
         content = content.replace("{{KILL_SOUND}}", kill_lua_table)
-        content = content.replace("{{MATERIAL_PATH}}", material_path)
+        content = content.replace("{{MATERIAL_PATHS}}", mat_lua_table)
         content = content.replace("{{CLASS_NAME}}", f"npc_{bot_name}")
         content = content.replace("{{HEALTH}}", str(bot_config["health"]))
         content = content.replace("{{SPEED}}", str(bot_config["speed"]))
@@ -141,8 +166,8 @@ def generate_nextbots():
         # Create addon.json
         addon_json_path = os.path.join(addon_path, "addon.json")
         addon_data = {
-            "title": "Generated Nextbots Collection",
-            "description": "A collection of aggressive 2D Nextbots generated using the Garry's Mod Nextbot Generator.",
+            "title": addon_name.replace('_', ' ').title(),
+            "description": f"A collection of aggressive 2D Nextbots labeled under '{addon_name}'.",
             "type": "NPC",
             "tags": ["fun", "roleplay"],
             "ignore": []
@@ -152,7 +177,7 @@ def generate_nextbots():
 
         # Create local README.txt in the addon folder
         readme_content = f"""
-Garry's Mod Generated Nextbot Addon (DrGBase Version)
+Garry's Mod Generated Nextbot Addon: {addon_name}
 ===================================
 
 This addon was automatically generated and requires DrGBase.
@@ -175,7 +200,7 @@ Troubleshooting:
 """
         with open(os.path.join(addon_path, "README.txt"), 'w') as f:
             f.write(readme_content.strip())
-        print(f"\nSuccessfully generated {generated_count} Nextbots in '{addon_name}'")
+        print(f"\nSuccessfully generated {generated_count} Nextbots in labeled folder: '{addon_name}'")
 
         # Troubleshooting Info
         print("\n" + "="*50)
