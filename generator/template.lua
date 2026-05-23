@@ -138,7 +138,7 @@ if CLIENT then
     end
 
     function ENT:Draw()
-        -- High quality 2D Sprite Rendering
+        -- Robust 2D Sprite Rendering
         if not self.Mats or #self.Mats == 0 then return end
 
         local frameIndex = 1
@@ -151,16 +151,9 @@ if CLIENT then
 
         local pos = self:GetPos() + Vector(0, 0, 60)
 
-        -- Billboarding: Make the sprite face the player
-        local ang = EyeAngles()
-        ang:RotateAroundAxis(ang:Up(), -90)
-        ang:RotateAroundAxis(ang:Forward(), 90)
-
-        cam.Start3D2D(pos, ang, 0.5)
-            surface.SetMaterial(currentMat)
-            surface.SetDrawColor(255, 255, 255, 255)
-            surface.DrawTexturedRect(-128, -128, 256, 256)
-        cam.End3D2D()
+        -- Standard 2D Nextbot billboarding
+        render.SetMaterial(currentMat)
+        render.DrawSprite(pos, 128, 128, Color(255, 255, 255, 255))
     end
 end
 
