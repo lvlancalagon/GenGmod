@@ -37,6 +37,10 @@ if SERVER then
         self.LoseTargetDist = {{LOSE_TARGET_DIST}}
         self.SearchRadius = {{SEARCH_RADIUS}}
         self.NextContactDamageTime = 0
+
+        -- Hide base model
+        self:SetRenderMode(RENDERMODE_TRANSALPHA)
+        self:SetColor(Color(255, 255, 255, 0))
     end
 
     function ENT:OnMeleeAttack(enemy)
@@ -122,11 +126,19 @@ if CLIENT then
         -- Pre-cache materials
         self.Mats = {}
         for _, path in ipairs(MAT_PATHS) do
-            table.insert(self.Mats, Material(path, "noclamp smooth"))
+            local mat = Material(path, "noclamp smooth")
+            if mat and not mat:IsError() then
+                self.Mats[#self.Mats + 1] = mat
+            end
         end
+
+        -- Hide base model
+        self:SetRenderMode(RENDERMODE_TRANSALPHA)
+        self:SetColor(Color(255, 255, 255, 0))
     end
 
     function ENT:Draw()
+        -- High quality 2D Sprite Rendering
         if not self.Mats or #self.Mats == 0 then return end
 
         local frameIndex = 1
@@ -138,6 +150,8 @@ if CLIENT then
         if not currentMat then return end
 
         local pos = self:GetPos() + Vector(0, 0, 60)
+
+        -- Billboarding: Make the sprite face the player
         local ang = EyeAngles()
         ang:RotateAroundAxis(ang:Up(), -90)
         ang:RotateAroundAxis(ang:Forward(), 90)
