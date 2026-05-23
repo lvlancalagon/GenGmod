@@ -16,7 +16,7 @@ ENT.RunSpeed = {{SPEED}}
 ENT.Acceleration = {{ACCELERATION}}
 ENT.JumpHeight = {{JUMP_POWER}}
 
--- AI
+-- AI Ranges
 ENT.RangeAttackRange = 0
 ENT.MeleeAttackRange = 50
 ENT.ReachEnemyRange = 50
@@ -34,6 +34,7 @@ if SERVER then
         self.SearchRadius = {{SEARCH_RADIUS}}
         self.NextContactDamageTime = 0
 
+        -- Transparency setup
         self:SetRenderMode(RENDERMODE_TRANSALPHA)
         self:SetColor(Color(255, 255, 255, 0))
     end
@@ -54,7 +55,9 @@ if SERVER then
         self:Wait(math.random(3, 7))
     end
 
+    -- Persistent Think (Works without AI)
     function ENT:CustomThink()
+        -- 1. Sound Logic
         if CurTime() > self.NextSoundTime then
             local enemy = self:GetEnemy()
             if IsValid(enemy) and enemy:Alive() and self:GetRangeTo(enemy:GetPos()) < self.LoseTargetDist then
@@ -70,6 +73,7 @@ if SERVER then
             end
         end
 
+        -- 2. Destruction Logic
         local trace = util.TraceLine({
             start = self:GetPos() + Vector(0,0,36),
             endpos = self:GetPos() + self:GetForward() * 40 + Vector(0,0,36),
@@ -112,10 +116,12 @@ if CLIENT then
     function ENT:CustomInitialize()
         self:SetRenderBounds(Vector(-128, -128, 0), Vector(128, 128, 128))
         self.Mats = {}
-        for _, path in ipairs(MAT_PATHS) do
+        for i, path in ipairs(MAT_PATHS) do
             local mat = Material(path, "noclamp smooth")
             if mat and not mat:IsError() then
-                self.Mats[#self.Mats + 1] = mat
+                self.Mats[i] = mat
+            else
+                print("[Nextbot] Error loading material: " .. path)
             end
         end
         self:SetRenderMode(RENDERMODE_TRANSALPHA)
@@ -125,6 +131,7 @@ if CLIENT then
     function ENT:Draw()
         if not self.Mats or #self.Mats == 0 then return end
 
+        -- Animation Logic
         local frameIndex = 1
         if #self.Mats > 1 then
             frameIndex = math.floor(CurTime() / 1.5) % #self.Mats + 1
@@ -134,11 +141,20 @@ if CLIENT then
         if not currentMat then return end
 
         local pos = self:GetPos() + Vector(0, 0, 60)
-        render.SetMaterial(currentMat)
-        render.DrawSprite(pos, 128, 128, Color(255, 255, 255, 255))
+
+        -- Billboarding: Make sprite face player
+        local ang = EyeAngles()
+        ang:RotateAroundAxis(ang:Up(), -90)
+        ang:RotateAroundAxis(ang:Forward(), 90)
+
+        cam.Start3D2D(pos, ang, 0.5)
+            surface.SetMaterial(currentMat)
+            surface.SetDrawColor(255, 255, 255, 255)
+            surface.DrawTexturedRect(-128, -128, 256, 256)
+        cam.End3D2D()
     end
 end
 
--- DO NOT TOUCH --
+-- Registration
 AddCSLuaFile()
 DrGBase.AddNextbot(ENT)
