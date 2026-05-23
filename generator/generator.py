@@ -4,12 +4,11 @@ import re
 import json
 import sys
 
-def normalize(s):
-    # Normalize by lowercasing and removing all non-alphanumeric characters
-    return re.sub(r'[^a-z0-9]', '', s.lower())
+def sanitize_name(s):
+    return re.sub(r'[^a-z0-9_]', '', s.lower().replace(' ', '_'))
 
 def generate_nextbots():
-    input_dir = 'inputs'
+    input_root = 'inputs'
     output_dir = 'outputs'
     template_path = 'template.lua'
 
@@ -30,30 +29,23 @@ def generate_nextbots():
     addon_path = os.path.join(output_dir, addon_name)
     os.makedirs(addon_path)
 
-    # Find all images (PNG/JPG)
-    all_images = [f for f in os.listdir(input_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    # Determine NPC source folders
+    # If there are subdirectories in inputs/, use them.
+    # Otherwise, fall back to the root of inputs/ as a single bot (backwards compatibility).
+    npc_dirs = [d for d in os.listdir(input_root) if os.path.isdir(os.path.join(input_root, d))]
 
-    # Determine primary images (those that aren't secondary animation frames)
-    # A primary image is either the only image, or doesn't end with _2, _frame2, etc.
-    primary_images = []
-    for img in all_images:
-        img_base = os.path.splitext(img.lower())[0]
-        if not re.search(r'(_[2-9]|_frame[2-9])$', img_base):
-            primary_images.append(img)
-
-    # Find all sounds (MP3/WAV/OGG)
-    all_sounds = [f for f in os.listdir(input_dir) if f.lower().endswith(('.mp3', '.wav', '.ogg'))]
+    if not npc_dirs:
+        print("No subdirectories found in inputs/. Please create a folder for each NPC.")
+        return
 
     generated_count = 0
 
-    for img_file in primary_images:
-        img_base = os.path.splitext(img_file)[0]
-        # bot_name is the sanitized version for GMod class naming
-        bot_name = re.sub(r'[^a-z0-9_]', '', img_base.lower().replace(' ', '_'))
-        # normalized_name is for matching assets regardless of spaces/underscores
-        normalized_name = normalize(img_base)
+    for npc_dir in npc_dirs:
+        source_path = os.path.join(input_root, npc_dir)
+        bot_display_name = npc_dir.title()
+        bot_name = sanitize_name(npc_dir)
 
-        print(f"\nGenerating Nextbot: {bot_name} (from {img_file})...")
+        print(f"\nGenerating Nextbot: {bot_display_name} (from folder '{npc_dir}')...")
 
         # Paths in GMod addon
         lua_path = os.path.join(addon_path, "lua", "entities", f"npc_{bot_name}.lua")
@@ -64,39 +56,32 @@ def generate_nextbots():
         os.makedirs(material_dir, exist_ok=True)
         os.makedirs(sound_dir, exist_ok=True)
 
-        # Find secondary animation frames
-        animation_frames = [img_file]
-        for other_img in all_images:
-            if other_img == img_file: continue
-            other_base = os.path.splitext(other_img.lower())[0]
-            if normalized_name in normalize(other_base) and re.search(r'(_[2-9]|_frame[2-9])$', other_base):
-                animation_frames.append(other_img)
-                print(f"  Found animation frame: {other_img}")
+        # Gather images (sorted for animation)
+        images = sorted([f for f in os.listdir(source_path) if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
+        if not images:
+            print(f"  Warning: No images found for {bot_display_name}. Skipping.")
+            continue
 
-        # Assets
+        # Gather sounds
+        all_sounds = [f for f in os.listdir(source_path) if f.lower().endswith(('.mp3', '.wav', '.ogg'))]
         chase_sounds = []
         kill_sounds = []
 
-        # Look for sounds
         for snd in all_sounds:
-            snd_clean = os.path.splitext(snd.lower())[0]
-            snd_norm = normalize(snd_clean)
+            snd_lower = snd.lower()
+            if any(x in snd_lower for x in ["kill", "death", "attack"]):
+                kill_sounds.append(snd)
+            else:
+                chase_sounds.append(snd)
 
-            if normalized_name in snd_norm or len(primary_images) == 1:
-                if any(x in snd_norm for x in ["kill", "death", "attack"]):
-                    kill_sounds.append(snd)
-                else:
-                    chase_sounds.append(snd)
-
-        # Copy images
+        # Copy images and prepare Lua material list
         material_paths = []
-        for i, frame in enumerate(animation_frames):
+        for i, frame in enumerate(images):
             ext = os.path.splitext(frame)[1]
             dest_img_name = f"frame{i+1}{ext}"
-            shutil.copy(os.path.join(input_dir, frame), os.path.join(material_dir, dest_img_name))
+            shutil.copy(os.path.join(source_path, frame), os.path.join(material_dir, dest_img_name))
             material_paths.append(f"nextbot/{bot_name}/{dest_img_name}")
 
-        # Prepare Lua material list
         mat_lua_table = "{" + ", ".join([f'"{p}"' for p in material_paths]) + "}"
 
         # Copy sounds and prepare Lua table strings
@@ -104,23 +89,23 @@ def generate_nextbots():
         for i, snd in enumerate(chase_sounds):
             ext = os.path.splitext(snd)[1]
             dest_name = f"chase{i+1}{ext}"
-            shutil.copy(os.path.join(input_dir, snd), os.path.join(sound_dir, dest_name))
+            shutil.copy(os.path.join(source_path, snd), os.path.join(sound_dir, dest_name))
             chase_sound_paths.append(f"nextbot/{bot_name}/{dest_name}")
-            print(f"  Matched chase sound: {snd} -> {dest_name}")
+            print(f"  Matched chase sound: {snd}")
 
         kill_sound_paths = []
         for i, snd in enumerate(kill_sounds):
             ext = os.path.splitext(snd)[1]
             dest_name = f"kill{i+1}{ext}"
-            shutil.copy(os.path.join(input_dir, snd), os.path.join(sound_dir, dest_name))
+            shutil.copy(os.path.join(source_path, snd), os.path.join(sound_dir, dest_name))
             kill_sound_paths.append(f"nextbot/{bot_name}/{dest_name}")
-            print(f"  Matched kill sound: {snd} -> {dest_name}")
+            print(f"  Matched kill sound: {snd}")
 
         chase_lua_table = "{" + ", ".join([f'"{p}"' for p in chase_sound_paths]) + "}"
         kill_lua_table = "{" + ", ".join([f'"{p}"' for p in kill_sound_paths]) + "}"
 
-        # Load optional config
-        config_file = os.path.join(input_dir, f"{bot_name}.json")
+        # Load optional config from inside the NPC folder
+        config_file = os.path.join(source_path, "config.json")
         bot_config = {
             "health": 100,
             "speed": 600,
@@ -142,7 +127,6 @@ def generate_nextbots():
         with open(template_path, 'r') as f:
             content = f.read()
 
-        bot_display_name = bot_name.replace('_', ' ').title()
         content = content.replace("{{PRINT_NAME}}", bot_display_name)
         content = content.replace("{{CHASE_SOUND}}", chase_lua_table)
         content = content.replace("{{KILL_SOUND}}", kill_lua_table)
@@ -160,14 +144,14 @@ def generate_nextbots():
             f.write(content)
 
         generated_count += 1
-        print(f"Done for {bot_name}!")
+        print(f"Done for {bot_display_name}!")
 
     if generated_count > 0:
         # Create addon.json
         addon_json_path = os.path.join(addon_path, "addon.json")
         addon_data = {
             "title": addon_name.replace('_', ' ').title(),
-            "description": f"A collection of aggressive 2D Nextbots labeled under '{addon_name}'.",
+            "description": f"A collection of aggressive 2D Nextbots generated using the Garry's Mod Nextbot Generator.",
             "type": "NPC",
             "tags": ["fun", "roleplay"],
             "ignore": []
@@ -180,23 +164,14 @@ def generate_nextbots():
 Garry's Mod Generated Nextbot Addon: {addon_name}
 ===================================
 
-This addon was automatically generated and requires DrGBase.
-
 Installation:
 1. Ensure you have DrGBase installed: https://steamcommunity.com/sharedfiles/filedetails/?id=1560118657
 2. Copy this folder ('{addon_name}') into your 'Garry's Mod/garrysmod/addons/' directory.
-   - IMPORTANT: Make sure the 'lua', 'materials', and 'sound' folders are all inside.
 3. Restart Garry's Mod.
 
-Troubleshooting:
-- If you see 'Addon Hidden addon failed to download' in the console:
-  This is a Steam Workshop issue. It means you are subscribed to a workshop item
-  that has been deleted or hidden by its author. It is NOT caused by this local addon.
-  To fix it, go to your Steam Workshop subscriptions and unsubscribe from any items
-  that appear as 'Deleted' or 'Hidden'.
-
-- If the Nextbot doesn't appear in-game:
-  Check the 'NPCs' tab in the spawn menu under the category 'Custom Nextbots'.
+Organization:
+Each NPC was generated from its own folder in the input directory.
+Animated frames and sounds are organized into subfolders in materials/ and sound/.
 """
         with open(os.path.join(addon_path, "README.txt"), 'w') as f:
             f.write(readme_content.strip())
@@ -212,7 +187,7 @@ Troubleshooting:
         print("   - This is a known Steam Workshop issue and is NOT caused by this generator.")
         print("   - It happens when you are subscribed to an addon that was deleted or hidden by its creator.")
         print("   - To fix it, go to your Steam Workshop subscriptions and unsubscribe from any 'Deleted' or 'Hidden' items.")
-        print("4. Ensure your 'inputs' folder has valid .png and .mp3/.wav files for the best results.")
+        print("4. Folder-based organization: Place assets for each NPC in its own folder inside 'inputs/'.")
         print("="*50 + "\n")
 
 if __name__ == "__main__":
