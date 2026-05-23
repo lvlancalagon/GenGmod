@@ -24,21 +24,16 @@ ENT.ReachEnemyRange = 50
 if SERVER then
     function ENT:CustomInitialize()
         self:SetCollisionBounds(Vector(-16, -16, 0), Vector(16, 16, 72))
-
-        -- Set render bounds to prevent culling
         self:SetRenderBounds(Vector(-128, -128, 0), Vector(128, 128, 128))
 
         -- Sound initialization
-        self.ChaseSounds = {{CHASE_SOUND}}
-        self.KillSounds = {{KILL_SOUND}}
+        self.ChaseSounds = {{CHASE_SOUND}} or {}
+        self.KillSounds = {{KILL_SOUND}} or {}
         self.NextSoundTime = 0
-
-        -- Configuration
         self.LoseTargetDist = {{LOSE_TARGET_DIST}}
         self.SearchRadius = {{SEARCH_RADIUS}}
         self.NextContactDamageTime = 0
 
-        -- Hide base model
         self:SetRenderMode(RENDERMODE_TRANSALPHA)
         self:SetColor(Color(255, 255, 255, 0))
     end
@@ -50,7 +45,6 @@ if SERVER then
             viewpunch = Angle(20, 0, 0)
         })
 
-        -- Play kill sound
         if #self.KillSounds > 0 then
             self:EmitSound(self.KillSounds[math.random(#self.KillSounds)], 100, 100)
         end
@@ -60,19 +54,15 @@ if SERVER then
         self:Wait(math.random(3, 7))
     end
 
-    -- Thinking hook for sound playback (Works even when AI is disabled)
     function ENT:CustomThink()
-        -- Sound playback logic independent of coroutine/AI
         if CurTime() > self.NextSoundTime then
             local enemy = self:GetEnemy()
             if IsValid(enemy) and enemy:Alive() and self:GetRangeTo(enemy:GetPos()) < self.LoseTargetDist then
-                -- Chase Sound
                 if #self.ChaseSounds > 0 then
                     self:EmitSound(self.ChaseSounds[math.random(#self.ChaseSounds)], 100, 100)
                     self.NextSoundTime = CurTime() + 5
                 end
             else
-                -- Idle Sound
                 if #self.ChaseSounds > 0 then
                     self:EmitSound(self.ChaseSounds[math.random(#self.ChaseSounds)], 100, 100)
                     self.NextSoundTime = CurTime() + math.random(10, 20)
@@ -80,7 +70,6 @@ if SERVER then
             end
         end
 
-        -- Aggressive Destruction (Always active)
         local trace = util.TraceLine({
             start = self:GetPos() + Vector(0,0,36),
             endpos = self:GetPos() + self:GetForward() * 40 + Vector(0,0,36),
@@ -118,12 +107,10 @@ if SERVER then
 end
 
 if CLIENT then
-    local MAT_PATHS = {{MATERIAL_PATHS}}
+    local MAT_PATHS = {{MATERIAL_PATHS}} or {}
 
     function ENT:CustomInitialize()
         self:SetRenderBounds(Vector(-128, -128, 0), Vector(128, 128, 128))
-
-        -- Pre-cache materials
         self.Mats = {}
         for _, path in ipairs(MAT_PATHS) do
             local mat = Material(path, "noclamp smooth")
@@ -131,14 +118,11 @@ if CLIENT then
                 self.Mats[#self.Mats + 1] = mat
             end
         end
-
-        -- Hide base model
         self:SetRenderMode(RENDERMODE_TRANSALPHA)
         self:SetColor(Color(255, 255, 255, 0))
     end
 
     function ENT:Draw()
-        -- Robust 2D Sprite Rendering
         if not self.Mats or #self.Mats == 0 then return end
 
         local frameIndex = 1
@@ -150,8 +134,6 @@ if CLIENT then
         if not currentMat then return end
 
         local pos = self:GetPos() + Vector(0, 0, 60)
-
-        -- Standard 2D Nextbot billboarding
         render.SetMaterial(currentMat)
         render.DrawSprite(pos, 128, 128, Color(255, 255, 255, 255))
     end
