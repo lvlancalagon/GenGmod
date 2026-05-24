@@ -5,11 +5,9 @@ import json
 import sys
 
 def sanitize_name(s):
-    # Sanitize for GMod class name
     return re.sub(r'[^a-z0-9_]', '', s.lower().replace(' ', '_'))
 
 def normalize(s):
-    # Normalize for matching
     return re.sub(r'[^a-z0-9]', '', s.lower())
 
 def generate_nextbots():
@@ -33,13 +31,11 @@ def generate_nextbots():
     # Determine NPC sources
     npc_sources = []
     if os.path.exists(input_root):
-        # 1. Folders
         for d in sorted(os.listdir(input_root)):
             d_path = os.path.join(input_root, d)
             if os.path.isdir(d_path):
                 npc_sources.append({'name': d, 'path': d_path, 'type': 'dir'})
 
-        # 2. Individual Images
         root_images = sorted([f for f in os.listdir(input_root) if os.path.isfile(os.path.join(input_root, f)) and f.lower().endswith(('.png', '.jpg', '.jpeg'))])
         for img in root_images:
             name = os.path.splitext(img)[0]
@@ -57,10 +53,10 @@ def generate_nextbots():
         bot_name = sanitize_name(source['name'])
         normalized_name = normalize(source['name'])
 
-        print(f"\n[+] Processing: {bot_display_name} ({bot_name})")
+        print(f"\n[+] Generating: {bot_display_name} ({bot_name})")
 
         lua_path = os.path.join(addon_path, "lua", "entities", f"npc_{bot_name}.lua")
-        material_dir = os.path.join(addon_path, "materials", "nextbot", bot_name)
+        material_dir = os.path.join(addon_path, "materials", "sprites", "nextbot", bot_name)
         sound_dir = os.path.join(addon_path, "sound", "nextbot", bot_name)
 
         os.makedirs(os.path.dirname(lua_path), exist_ok=True)
@@ -77,7 +73,6 @@ def generate_nextbots():
         }
 
         if source['type'] == 'dir':
-            # Folder mode
             images = sorted([f for f in os.listdir(source['path']) if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
             all_sounds = [f for f in os.listdir(source['path']) if f.lower().endswith(('.mp3', '.wav', '.ogg'))]
             for snd in all_sounds:
@@ -93,9 +88,7 @@ def generate_nextbots():
                     with open(config_file, 'r') as f: config.update(json.load(f))
                 except Exception as e: print(f"  [!] Config error: {e}")
         else:
-            # Single file mode
             images = [os.path.basename(source['path'])]
-            # Search root for matching sounds
             root_sounds = [f for f in os.listdir(input_root) if os.path.isfile(os.path.join(input_root, f)) and f.lower().endswith(('.mp3', '.wav', '.ogg'))]
             for snd in root_sounds:
                 snd_norm = normalize(os.path.splitext(snd.lower())[0])
@@ -107,13 +100,14 @@ def generate_nextbots():
 
         # Copy Images
         material_paths = []
+        first_ext = ".png"
         for i, frame in enumerate(images):
             ext = os.path.splitext(frame)[1]
-            dest_name = f"frame{i+1}{ext}"
+            if i == 0: first_ext = ext
+            dest_name = f"idle{i+1}{ext}"
             src = source['path'] if source['type'] == 'file' else os.path.join(source['path'], frame)
             shutil.copy(src, os.path.join(material_dir, dest_name))
-            material_paths.append(f"nextbot/{bot_name}/{dest_name}")
-            print(f"  -> Added image: {dest_name}")
+            print(f"  -> Added frame: {dest_name}")
 
         # Copy Sounds
         chase_paths = []
@@ -122,7 +116,6 @@ def generate_nextbots():
             dest = f"chase{i+1}{ext}"
             shutil.copy(src, os.path.join(sound_dir, dest))
             chase_paths.append(f"nextbot/{bot_name}/{dest}")
-            print(f"  -> Added chase sound: {dest}")
 
         kill_paths = []
         for i, src in enumerate(kill_sounds):
@@ -130,15 +123,14 @@ def generate_nextbots():
             dest = f"kill{i+1}{ext}"
             shutil.copy(src, os.path.join(sound_dir, dest))
             kill_paths.append(f"nextbot/{bot_name}/{dest}")
-            print(f"  -> Added kill sound: {dest}")
 
         # Template Replacements
         with open(template_path, 'r') as f: content = f.read()
         content = content.replace("{{PRINT_NAME}}", bot_display_name)
         content = content.replace("{{CHASE_SOUND}}", "{" + ", ".join([f'"{p}"' for p in chase_paths]) + "}")
         content = content.replace("{{KILL_SOUND}}", "{" + ", ".join([f'"{p}"' for p in kill_paths]) + "}")
-        content = content.replace("{{MATERIAL_PATHS}}", "{" + ", ".join([f'"{p}"' for p in material_paths]) + "}")
-        content = content.replace("{{MATERIAL_PATH}}", material_paths[0] if material_paths else "")
+        content = content.replace("{{SPRITE_FOLDER}}", f"sprites/nextbot/{bot_name}")
+        content = content.replace("{{RAGDOLL_MAT}}", f"sprites/nextbot/{bot_name}/idle1{first_ext}")
         content = content.replace("{{CLASS_NAME}}", f"npc_{bot_name}")
         for k, v in config.items():
             content = content.replace("{{" + k.upper() + "}}", str(v))
@@ -151,7 +143,7 @@ def generate_nextbots():
             json.dump({"title": addon_name, "type": "NPC", "tags": ["fun"]}, f, indent=4)
 
         print(f"\n[SUCCESS] Generated {generated_count} Nextbots in 'outputs/{addon_name}'")
-        print(f"Copy the folder to your GMod 'addons' directory and enjoy!")
+        print(f"Note: This pack requires DrGBase to be installed.")
 
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
