@@ -6,6 +6,7 @@ ENT.PrintName = "{{PRINT_NAME}}"
 ENT.Category = "Custom Nextbots"
 ENT.Models = {"models/props_junk/watermelon01.mdl"}
 ENT.SpawnHealth = {{HEALTH}}
+ENT.HealthRegen = 10
 ENT.BloodColor = BLOOD_COLOR_RED
 ENT.Spawnable = true
 ENT.AdminSpawnable = true
@@ -18,8 +19,33 @@ ENT.JumpHeight = {{JUMP_POWER}}
 
 -- AI Ranges
 ENT.RangeAttackRange = 0
-ENT.MeleeAttackRange = 50
-ENT.ReachEnemyRange = 50
+ENT.MeleeAttackRange = 80
+ENT.ReachEnemyRange = 60
+ENT.AvoidEnemyRange = 0
+
+-- Possession
+ENT.PossessionEnabled = true
+ENT.PossessionMovement = POSSESSION_MOVE_8DIR
+ENT.PossessionViews = {
+  {
+    offset = Vector(0, 0, 20),
+    distance = 400
+  }
+}
+ENT.PossessionBinds = {
+  [IN_ATTACK] = {{
+    coroutine = true,
+    onkeydown = function(self)
+        self:MeleeATT()
+    end
+  }},
+  [IN_JUMP] = {{
+    coroutine = true,
+    onkeydown = function(self)
+        self:Jump()
+    end
+  }}
+}
 
 if SERVER then
     function ENT:CustomInitialize()
@@ -40,15 +66,37 @@ if SERVER then
     end
 
     function ENT:OnMeleeAttack(enemy)
-        self:Attack({
-            damage = {{DAMAGE}},
-            type = DMG_SLASH,
-            viewpunch = Angle(20, 0, 0)
-        })
-
-        if #self.KillSounds > 0 then
-            self:EmitSound(self.KillSounds[math.random(#self.KillSounds)], 100, 100)
+        -- Facing check for aggressive behavior
+        if self:GetForward():Dot((enemy:GetPos() - self:GetPos()):GetNormalized()) > math.cos(math.rad(30)) then
+            self:MeleeATT()
         end
+    end
+
+    function ENT:MeleeATT()
+        -- Aggressive attack logic with delayed damage and effects
+        timer.Simple(0.4, function()
+            if IsValid(self) then
+                self:Attack({
+                    damage = {{DAMAGE}},
+                    type = DMG_SLASH,
+                    range = 90,
+                    push = false,
+                    force = Vector(400, 0, 10)
+                }, function(self, hit)
+                    if #hit > 0 then
+                        for _, ent in ipairs(hit) do
+                            ent:TakeDamage({{DAMAGE}}, self, self)
+                            ent:SetVelocity(self:GetForward() * 400 + self:GetUp() * 50)
+                        end
+                        if #self.KillSounds > 0 then
+                            self:EmitSound(self.KillSounds[math.random(#self.KillSounds)], 100, 100)
+                        end
+                    else
+                        self:EmitSound("npc/zombie/claw_miss" .. math.random(1, 2) .. ".wav", 100, 100)
+                    end
+                end)
+            end
+        end)
     end
 
     function ENT:OnReachedPatrol()
@@ -73,19 +121,20 @@ if SERVER then
             end
         end
 
-        -- 2. Destruction Logic
-        local trace = util.TraceLine({
-            start = self:GetPos() + Vector(0,0,36),
-            endpos = self:GetPos() + self:GetForward() * 40 + Vector(0,0,36),
-            filter = self
-        })
-
-        if IsValid(trace.Entity) then
-            if trace.Entity:GetClass() == "prop_physics" or trace.Entity:GetClass() == "func_breakable" then
-                trace.Entity:TakeDamage( 500, self, self )
-                local effectData = EffectData()
-                effectData:SetOrigin( trace.Entity:GetPos() )
-                util.Effect( "Explosion", effectData )
+        -- 2. Destruction & Door Interaction
+        for _, ent in pairs(ents.FindInSphere(self:LocalToWorld(Vector(0,0,75)), 60)) do
+            if IsValid(ent) then
+                -- Open doors
+                if ent:GetClass() == "prop_door_rotating" or ent:GetClass() == "func_door_rotating" or ent:GetClass() == "func_door" then
+                    ent:Fire("open")
+                end
+                -- Smash breakables
+                if ent:GetClass() == "prop_physics" or ent:GetClass() == "func_breakable" then
+                    ent:TakeDamage(500, self, self)
+                    local effectData = EffectData()
+                    effectData:SetOrigin(ent:GetPos())
+                    util.Effect("Explosion", effectData)
+                end
             end
         end
     end
@@ -99,11 +148,35 @@ if SERVER then
             dmgInfo:SetDamageType(DMG_SLASH)
             ent:TakeDamageInfo(dmgInfo)
             self.NextContactDamageTime = CurTime() + 0.5
-            self:OnMeleeAttack(ent)
+            self:MeleeATT()
         end
     end
 
     function ENT:OnDeath(dmg, hitgroup)
+        -- Custom 2D Ragdoll System
+        local ragdoll = ents.Create("prop_physics")
+        ragdoll:SetAngles(self:GetAngles())
+        ragdoll:SetModel(self:GetModel())
+        ragdoll:SetPos(self:GetPos())
+        ragdoll:SetNW2String("2D_RAGDOLLMAT", "{{MATERIAL_PATH}}")
+        ragdoll:DrawShadow(false)
+        ragdoll:SetMaterial("models/effects/vol_light001")
+        ragdoll:Spawn()
+
+        local phys = ragdoll:GetPhysicsObject()
+        if IsValid(phys) then
+            phys:Wake()
+            phys:SetVelocity(self:GetForward() * -1000 + self:GetUp() * 440)
+        end
+
+        if GetConVarNumber("drgbase_remove_ragdolls") != -1 then
+            SafeRemoveEntityDelayed(ragdoll, GetConVarNumber("drgbase_remove_ragdolls") or 10)
+        end
+
+        if IsValid(self:GetCreator()) then
+            self:GetCreator():DrG_AddUndo(ragdoll, "NPC", "Undone " .. self.PrintName)
+        end
+
         if #self.KillSounds > 0 then
             self:EmitSound(self.KillSounds[math.random(#self.KillSounds)], 100, 100)
         end
@@ -116,12 +189,10 @@ if CLIENT then
     function ENT:CustomInitialize()
         self:SetRenderBounds(Vector(-128, -128, 0), Vector(128, 128, 128))
         self.Mats = {}
-        for i, path in ipairs(MAT_PATHS) do
+        for _, path in ipairs(MAT_PATHS) do
             local mat = Material(path, "noclamp smooth")
             if mat and not mat:IsError() then
-                self.Mats[i] = mat
-            else
-                print("[Nextbot] Error loading material: " .. path)
+                self.Mats[#self.Mats + 1] = mat
             end
         end
         self:SetRenderMode(RENDERMODE_TRANSALPHA)
@@ -131,7 +202,6 @@ if CLIENT then
     function ENT:Draw()
         if not self.Mats or #self.Mats == 0 then return end
 
-        -- Animation Logic
         local frameIndex = 1
         if #self.Mats > 1 then
             frameIndex = math.floor(CurTime() / 1.5) % #self.Mats + 1
@@ -141,8 +211,6 @@ if CLIENT then
         if not currentMat then return end
 
         local pos = self:GetPos() + Vector(0, 0, 60)
-
-        -- Billboarding: Make sprite face player
         local ang = EyeAngles()
         ang:RotateAroundAxis(ang:Up(), -90)
         ang:RotateAroundAxis(ang:Forward(), 90)
@@ -155,6 +223,6 @@ if CLIENT then
     end
 end
 
--- Registration
+-- DO NOT TOUCH --
 AddCSLuaFile()
 DrGBase.AddNextbot(ENT)

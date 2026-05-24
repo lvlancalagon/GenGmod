@@ -138,6 +138,7 @@ def generate_nextbots():
         content = content.replace("{{CHASE_SOUND}}", "{" + ", ".join([f'"{p}"' for p in chase_paths]) + "}")
         content = content.replace("{{KILL_SOUND}}", "{" + ", ".join([f'"{p}"' for p in kill_paths]) + "}")
         content = content.replace("{{MATERIAL_PATHS}}", "{" + ", ".join([f'"{p}"' for p in material_paths]) + "}")
+        content = content.replace("{{MATERIAL_PATH}}", material_paths[0] if material_paths else "")
         content = content.replace("{{CLASS_NAME}}", f"npc_{bot_name}")
         for k, v in config.items():
             content = content.replace("{{" + k.upper() + "}}", str(v))
