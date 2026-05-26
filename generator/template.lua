@@ -1,24 +1,17 @@
 if not DrGBase then return end
-ENT.Base = "drgbase_nextbot_sprite"
+ENT.Base = "drgbase_nextbot"
 ENT.Type = "nextbot"
 
 ENT.PrintName = "{{PRINT_NAME}}"
 ENT.Category = "Custom Nextbots"
+ENT.Models = {"models/props_junk/watermelon01.mdl"}
 ENT.SpawnHealth = {{HEALTH}}
 ENT.HealthRegen = 10
 ENT.BloodColor = BLOOD_COLOR_RED
 ENT.Spawnable = true
 ENT.AdminSpawnable = true
 
--- Animations (DrGBase Sprite Base)
-ENT.SpriteFolder = "{{SPRITE_FOLDER}}"
-ENT.FramesPerSecond = 1 -- Approximately 1 second per frame as requested
-ENT.WalkAnimation = "idle"
-ENT.RunAnimation = "idle"
-ENT.IdleAnimation = "idle"
-ENT.JumpAnimation = "idle"
-
--- Stats
+-- AI Stats
 ENT.WalkSpeed = 150
 ENT.RunSpeed = {{SPEED}}
 ENT.Acceleration = {{ACCELERATION}}
@@ -57,14 +50,19 @@ ENT.PossessionBinds = {
 if SERVER then
     function ENT:CustomInitialize()
         self:SetCollisionBounds(Vector(-30, -30, 0), Vector(30, 30, 110))
+        self:SetRenderBounds(Vector(-128, -128, 0), Vector(128, 128, 128))
 
         -- Sound initialization
-        self.ChaseSounds = {{CHASE_SOUND}} or {}
-        self.KillSounds = {{KILL_SOUND}} or {}
+        self.ChaseSounds = {{CHASE_SOUNDS}}
+        self.KillSounds = {{KILL_SOUNDS}}
         self.NextSoundTime = 0
         self.LoseTargetDist = {{LOSE_TARGET_DIST}}
         self.SearchRadius = {{SEARCH_RADIUS}}
         self.NextContactDamageTime = 0
+
+        -- Transparency setup
+        self:SetRenderMode(RENDERMODE_TRANSALPHA)
+        self:SetColor(Color(255, 255, 255, 0))
     end
 
     function ENT:OnMeleeAttack(enemy)
@@ -74,9 +72,6 @@ if SERVER then
     end
 
     function ENT:MeleeATT()
-        -- Play Attack Animation if available
-        self:PlaySpriteAnim("Attack")
-
         timer.Simple(0.4, function()
             if IsValid(self) then
                 self:Attack({
@@ -107,23 +102,35 @@ if SERVER then
     end
 
     function ENT:CustomThink()
-        -- 1. Sound Logic (Works without AI)
+        -- 1. Looping Sound Logic (AI Independent)
         if CurTime() > self.NextSoundTime then
             local enemy = self:GetEnemy()
+            local sound_to_play = nil
+
             if IsValid(enemy) and enemy:Alive() and self:GetRangeTo(enemy:GetPos()) < self.LoseTargetDist then
+                -- Chase state
                 if #self.ChaseSounds > 0 then
-                    self:EmitSound(self.ChaseSounds[math.random(#self.ChaseSounds)], 100, 100)
-                    self.NextSoundTime = CurTime() + 5
+                    sound_to_play = self.ChaseSounds[math.random(#self.ChaseSounds)]
+                    self.NextSoundTime = CurTime() + 5 -- Check again in 5s
                 end
             else
+                -- Idle state
                 if #self.ChaseSounds > 0 then
-                    self:EmitSound(self.ChaseSounds[math.random(#self.ChaseSounds)], 100, 100)
+                    sound_to_play = self.ChaseSounds[math.random(#self.ChaseSounds)]
                     self.NextSoundTime = CurTime() + math.random(10, 20)
                 end
             end
+
+            if sound_to_play then
+                -- Standard EmitSound for simplicity and broad compatibility
+                self:EmitSound(sound_to_play, 100, 100)
+
+                -- Force a more immediate loop if the file is long (Estimation)
+                -- In GMod server, we don't have SoundDuration easily, so we use logic hooks.
+            end
         end
 
-        -- 2. Environmental Interaction (Doors and Smash)
+        -- 2. Environmental Interaction
         for _, ent in pairs(ents.FindInSphere(self:LocalToWorld(Vector(0,0,75)), 60)) do
             if IsValid(ent) then
                 if ent:GetClass() == "prop_door_rotating" or ent:GetClass() == "func_door_rotating" or ent:GetClass() == "func_door" then
@@ -156,11 +163,11 @@ if SERVER then
         -- Custom 2D Ragdoll
         local ragdoll = ents.Create("prop_physics")
         ragdoll:SetAngles(self:GetAngles())
-        ragdoll:SetModel("models/props_junk/watermelon01.mdl") -- Base model
+        ragdoll:SetModel("models/props_junk/watermelon01.mdl")
         ragdoll:SetPos(self:GetPos())
-        ragdoll:SetNW2String("2D_RAGDOLLMAT", "{{RAGDOLL_MAT}}")
+        ragdoll:SetNW2String("2D_RAGDOLLMAT", "{{MATERIAL_PATH}}")
         ragdoll:DrawShadow(false)
-        ragdoll:SetMaterial("models/effects/vol_light001") -- Hidden model
+        ragdoll:SetMaterial("models/effects/vol_light001")
         ragdoll:Spawn()
 
         local phys = ragdoll:GetPhysicsObject()
@@ -183,15 +190,60 @@ if SERVER then
     end
 end
 
--- Client-side rendering for the Ragdoll
 if CLIENT then
-    local RagdollMats = {} -- Cache for efficiency
+    local MAT_PATHS = {{MATERIAL_PATHS}}
+
+    function ENT:CustomInitialize()
+        self:SetRenderBounds(Vector(-128, -128, 0), Vector(128, 128, 128))
+        self.Mats = {}
+        for _, path in ipairs(MAT_PATHS) do
+            local mat = Material(path, "noclamp smooth nocull")
+            if mat and not mat:IsError() then
+                self.Mats[#self.Mats + 1] = mat
+            else
+                print("[Nextbot] Failed to load material: " .. path)
+            end
+        end
+        -- Hide base model on client
+        self:SetRenderMode(RENDERMODE_TRANSALPHA)
+        self:SetColor(Color(255, 255, 255, 0))
+    end
+
+    function ENT:Draw()
+        if not self.Mats or #self.Mats == 0 then return end
+
+        local frameIndex = 1
+        if #self.Mats > 1 then
+            frameIndex = math.floor(CurTime() / 1.5) % #self.Mats + 1
+        end
+
+        local currentMat = self.Mats[frameIndex]
+        if not currentMat then return end
+
+        local pos = self:GetPos() + Vector(0, 0, 60)
+
+        -- High quality 3D2D billboarding
+        local ang = EyeAngles()
+        ang:RotateAroundAxis(ang:Up(), -90)
+        ang:RotateAroundAxis(ang:Forward(), 90)
+
+        cam.Start3D2D(pos, ang, 0.5)
+            surface.SetMaterial(currentMat)
+            surface.SetDrawColor(255, 255, 255, 255)
+            surface.DrawTexturedRect(-128, -128, 256, 256)
+        cam.End3D2D()
+    end
+end
+
+-- Client-side rendering for the death Ragdoll
+if CLIENT then
+    local RagdollMats = {}
     hook.Add("PostDrawOpaqueRenderables", "NextbotRagdollRenderer", function()
         for _, ent in ipairs(ents.FindByClass("prop_physics")) do
             local mat_path = ent:GetNW2String("2D_RAGDOLLMAT", "")
             if mat_path != "" then
                 if not RagdollMats[mat_path] then
-                    RagdollMats[mat_path] = Material(mat_path, "noclamp smooth")
+                    RagdollMats[mat_path] = Material(mat_path, "noclamp smooth nocull")
                 end
                 local mat = RagdollMats[mat_path]
                 if mat and not mat:IsError() then

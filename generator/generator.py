@@ -4,7 +4,7 @@ import re
 import json
 import sys
 
-def sanitize_name(s):
+def sanitize(s):
     return re.sub(r'[^a-z0-9_]', '', s.lower().replace(' ', '_'))
 
 def normalize(s):
@@ -15,7 +15,7 @@ def generate_nextbots():
     output_dir = 'outputs'
     template_path = 'template.lua'
 
-    addon_name = sys.argv[1] if len(sys.argv) > 1 else os.getenv("ADDON_NAME", "my_generated_addon")
+    addon_name = sys.argv[1] if len(sys.argv) > 1 else os.getenv("ADDON_NAME", "my_generated_pack")
 
     if not os.path.exists(template_path):
         print(f"ERROR: {template_path} not found.")
@@ -28,14 +28,15 @@ def generate_nextbots():
     addon_path = os.path.join(output_dir, addon_name)
     os.makedirs(addon_path)
 
-    # Determine NPC sources
     npc_sources = []
     if os.path.exists(input_root):
+        # 1. Folders
         for d in sorted(os.listdir(input_root)):
             d_path = os.path.join(input_root, d)
             if os.path.isdir(d_path):
                 npc_sources.append({'name': d, 'path': d_path, 'type': 'dir'})
 
+        # 2. Loose files in root
         root_images = sorted([f for f in os.listdir(input_root) if os.path.isfile(os.path.join(input_root, f)) and f.lower().endswith(('.png', '.jpg', '.jpeg'))])
         for img in root_images:
             name = os.path.splitext(img)[0]
@@ -43,29 +44,29 @@ def generate_nextbots():
                 npc_sources.append({'name': name, 'path': os.path.join(input_root, img), 'type': 'file'})
 
     if not npc_sources:
-        print("ERROR: No images or folders found in 'inputs/'.")
+        print("ERROR: No assets found in inputs/.")
         return
 
     generated_count = 0
 
     for source in npc_sources:
-        bot_display_name = source['name'].title()
-        bot_name = sanitize_name(source['name'])
-        normalized_name = normalize(source['name'])
+        bot_disp = source['name'].title()
+        bot_name = sanitize(source['name'])
+        bot_norm = normalize(source['name'])
 
-        print(f"\n[+] Generating: {bot_display_name} ({bot_name})")
+        print(f"\n[+] Building NPC: {bot_disp}")
 
         lua_path = os.path.join(addon_path, "lua", "entities", f"npc_{bot_name}.lua")
-        material_dir = os.path.join(addon_path, "materials", "sprites", "nextbot", bot_name)
-        sound_dir = os.path.join(addon_path, "sound", "nextbot", bot_name)
+        mat_dir = os.path.join(addon_path, "materials", "nextbot", bot_name)
+        snd_dir = os.path.join(addon_path, "sound", "nextbot", bot_name)
 
         os.makedirs(os.path.dirname(lua_path), exist_ok=True)
-        os.makedirs(material_dir, exist_ok=True)
-        os.makedirs(sound_dir, exist_ok=True)
+        os.makedirs(mat_dir, exist_ok=True)
+        os.makedirs(snd_dir, exist_ok=True)
 
-        images = []
-        chase_sounds = []
-        kill_sounds = []
+        frames = []
+        chase_src = []
+        kill_src = []
         config = {
             "health": 100, "speed": 600, "acceleration": 4000,
             "search_radius": 2000, "lose_target_dist": 3000,
@@ -73,77 +74,74 @@ def generate_nextbots():
         }
 
         if source['type'] == 'dir':
-            images = sorted([f for f in os.listdir(source['path']) if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
-            all_sounds = [f for f in os.listdir(source['path']) if f.lower().endswith(('.mp3', '.wav', '.ogg'))]
-            for snd in all_sounds:
-                snd_norm = normalize(os.path.splitext(snd.lower())[0])
-                if any(x in snd_norm for x in ["kill", "death", "attack"]):
-                    kill_sounds.append(os.path.join(source['path'], snd))
-                else:
-                    chase_sounds.append(os.path.join(source['path'], snd))
+            frames = sorted([f for f in os.listdir(source['path']) if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
+            all_s = [f for f in os.listdir(source['path']) if f.lower().endswith(('.mp3', '.wav', '.ogg'))]
+            for s in all_s:
+                s_n = normalize(os.path.splitext(s.lower())[0])
+                if any(x in s_n for x in ["kill", "death", "attack"]): kill_src.append(os.path.join(source['path'], s))
+                else: chase_src.append(os.path.join(source['path'], s))
 
-            config_file = os.path.join(source['path'], "config.json")
-            if os.path.exists(config_file):
+            cfg_p = os.path.join(source['path'], "config.json")
+            if os.path.exists(cfg_p):
                 try:
-                    with open(config_file, 'r') as f: config.update(json.load(f))
-                except Exception as e: print(f"  [!] Config error: {e}")
+                    with open(cfg_p, 'r') as f: config.update(json.load(f))
+                except: print(f"  [!] Config error for {bot_name}")
         else:
-            images = [os.path.basename(source['path'])]
-            root_sounds = [f for f in os.listdir(input_root) if os.path.isfile(os.path.join(input_root, f)) and f.lower().endswith(('.mp3', '.wav', '.ogg'))]
-            for snd in root_sounds:
-                snd_norm = normalize(os.path.splitext(snd.lower())[0])
-                if normalized_name in snd_norm:
-                    if any(x in snd_norm for x in ["kill", "death", "attack"]):
-                        kill_sounds.append(os.path.join(input_root, snd))
-                    else:
-                        chase_sounds.append(os.path.join(input_root, snd))
+            frames = [os.path.basename(source['path'])]
+            # Match sounds in root by name
+            all_root_s = [f for f in os.listdir(input_root) if os.path.isfile(os.path.join(input_root, f)) and f.lower().endswith(('.mp3', '.wav', '.ogg'))]
+            for s in all_root_s:
+                s_n = normalize(os.path.splitext(s.lower())[0])
+                if bot_norm in s_n:
+                    if any(x in s_n for x in ["kill", "death", "attack"]): kill_src.append(os.path.join(input_root, s))
+                    else: chase_src.append(os.path.join(input_root, s))
+
+        if not frames: continue
 
         # Copy Images
-        material_paths = []
-        first_ext = ".png"
-        for i, frame in enumerate(images):
-            ext = os.path.splitext(frame)[1]
-            if i == 0: first_ext = ext
-            dest_name = f"idle{i+1}{ext}"
-            src = source['path'] if source['type'] == 'file' else os.path.join(source['path'], frame)
-            shutil.copy(src, os.path.join(material_dir, dest_name))
-            print(f"  -> Added frame: {dest_name}")
+        mat_paths = []
+        for i, f in enumerate(frames):
+            ext = os.path.splitext(f)[1]
+            d_n = f"frame{i+1}{ext}"
+            src_p = source['path'] if source['type'] == 'file' else os.path.join(source['path'], f)
+            shutil.copy(src_p, os.path.join(mat_dir, d_n))
+            mat_paths.append(f"nextbot/{bot_name}/{d_n}")
+            print(f"  -> Added image: {d_n}")
 
         # Copy Sounds
-        chase_paths = []
-        for i, src in enumerate(chase_sounds):
-            ext = os.path.splitext(src)[1]
-            dest = f"chase{i+1}{ext}"
-            shutil.copy(src, os.path.join(sound_dir, dest))
-            chase_paths.append(f"nextbot/{bot_name}/{dest}")
+        c_p = []
+        for i, s in enumerate(chase_src):
+            ext = os.path.splitext(s)[1]
+            d_n = f"chase{i+1}{ext}"
+            shutil.copy(s, os.path.join(snd_dir, d_n))
+            c_p.append(f"nextbot/{bot_name}/{d_n}")
+            print(f"  -> Added chase sound: {d_n}")
 
-        kill_paths = []
-        for i, src in enumerate(kill_sounds):
-            ext = os.path.splitext(src)[1]
-            dest = f"kill{i+1}{ext}"
-            shutil.copy(src, os.path.join(sound_dir, dest))
-            kill_paths.append(f"nextbot/{bot_name}/{dest}")
+        k_p = []
+        for i, s in enumerate(kill_src):
+            ext = os.path.splitext(s)[1]
+            d_n = f"kill{i+1}{ext}"
+            shutil.copy(s, os.path.join(snd_dir, d_n))
+            k_p.append(f"nextbot/{bot_name}/{d_n}")
+            print(f"  -> Added kill sound: {d_n}")
 
-        # Template Replacements
-        with open(template_path, 'r') as f: content = f.read()
-        content = content.replace("{{PRINT_NAME}}", bot_display_name)
-        content = content.replace("{{CHASE_SOUND}}", "{" + ", ".join([f'"{p}"' for p in chase_paths]) + "}")
-        content = content.replace("{{KILL_SOUND}}", "{" + ", ".join([f'"{p}"' for p in kill_paths]) + "}")
-        content = content.replace("{{SPRITE_FOLDER}}", f"sprites/nextbot/{bot_name}")
-        content = content.replace("{{RAGDOLL_MAT}}", f"sprites/nextbot/{bot_name}/idle1{first_ext}")
-        content = content.replace("{{CLASS_NAME}}", f"npc_{bot_name}")
-        for k, v in config.items():
-            content = content.replace("{{" + k.upper() + "}}", str(v))
-
-        with open(lua_path, 'w') as f: f.write(content)
+        # Write Lua
+        with open(template_path, 'r') as f: lua = f.read()
+        lua = lua.replace("{{PRINT_NAME}}", bot_disp)
+        lua = lua.replace("{{CHASE_SOUNDS}}", "{" + ", ".join([f'"{p}"' for p in c_p]) + "}")
+        lua = lua.replace("{{KILL_SOUNDS}}", "{" + ", ".join([f'"{p}"' for p in k_p]) + "}")
+        lua = lua.replace("{{MATERIAL_PATHS}}", "{" + ", ".join([f'"{p}"' for p in mat_paths]) + "}")
+        lua = lua.replace("{{MATERIAL_PATH}}", mat_paths[0] if mat_paths else "")
+        lua = lua.replace("{{CLASS_NAME}}", f"npc_{bot_name}")
+        for k, v in config.items(): lua = lua.replace("{{" + k.upper() + "}}", str(v))
+        with open(lua_path, 'w') as f: f.write(lua)
         generated_count += 1
+        print(f"  [OK] Done: {bot_name}")
 
     if generated_count > 0:
         with open(os.path.join(addon_path, "addon.json"), 'w') as f:
             json.dump({"title": addon_name, "type": "NPC", "tags": ["fun"]}, f, indent=4)
-
         print(f"\n[SUCCESS] Generated {generated_count} Nextbots in 'outputs/{addon_name}'")
-        print(f"Note: This pack requires DrGBase to be installed.")
 
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
